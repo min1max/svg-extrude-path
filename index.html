@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <meta charset=utf-8>
+  <meta name="viewport" content="width=620">
+  <title>Svg extrude</title>
+  <script src="js/three.min.js"></script>
+  <script src="js/OrbitControls.js"></script> 
+  <script src="js/Tween.js"></script>
+
+<script
+  src="https://code.jquery.com/jquery-2.2.4.js"
+  integrity="sha256-iT6Q9iMJYuQiMWNd9lDyBUStIq/8PuOW33aOqmvFpqI="
+  crossorigin="anonymous"></script>
+
+  </head>
+<style>
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+} 
+.buttons {
+    position: absolute;
+    padding: 20%;
+}   
+</style>
+<body>  
+
+<div class="buttons">
+    <button id="topView">2D</button> 
+    <button id="perspectiveView">3D</button>
+</div>
+
+
+<script>
+    // From d3-threeD.js
+    /* This Source Code Form is subject to the terms of the Mozilla Public
+     * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+     * You can obtain one at http://mozilla.org/MPL/2.0/. */
+    function d3threeD(exports) {
+    const DEGS_TO_RADS = Math.PI / 180, UNIT_SIZE = 100;
+    const DIGIT_0 = 48, DIGIT_9 = 57, COMMA = 44, SPACE = 32, PERIOD = 46, MINUS = 45;
+    exports.transformSVGPath =
+    function transformSVGPath(pathStr) {
+        var path = new THREE.ShapePath();
+        var idx = 1, len = pathStr.length, activeCmd,
+            x = 0, y = 0, nx = 0, ny = 0, firstX = null, firstY = null,
+            x1 = 0, x2 = 0, y1 = 0, y2 = 0,
+            rx = 0, ry = 0, xar = 0, laf = 0, sf = 0, cx, cy;
+        function eatNum() {
+            var sidx, c, isFloat = false, s;
+            // eat delims
+            while (idx < len) {
+                c = pathStr.charCodeAt(idx);
+                if (c !== COMMA && c !== SPACE)
+                    break;
+                idx++;
+            }
+            if (c === MINUS)
+                sidx = idx++;
+            else
+                sidx = idx;
+            // eat number
+            while (idx < len) {
+                c = pathStr.charCodeAt(idx);
+                if (DIGIT_0 <= c && c <= DIGIT_9) {
+                    idx++;
+                    continue;
+                }
+                else if (c === PERIOD) {
+                    idx++;
+                    isFloat = true;
+                    continue;
+                }
+                s = pathStr.substring(sidx, idx);
+                return isFloat ? parseFloat(s) : parseInt(s);
+            }
+            s = pathStr.substring(sidx);
+            return isFloat ? parseFloat(s) : parseInt(s);
+        }
+        function nextIsNum() {
+            var c;
+            // do permanently eat any delims...
+            while (idx < len) {
+                c = pathStr.charCodeAt(idx);
+                if (c !== COMMA && c !== SPACE)
+                    break;
+                idx++;
+            }
+            c = pathStr.charCodeAt(idx);
+            return (c === MINUS || (DIGIT_0 <= c && c <= DIGIT_9));
+        }
+        var canRepeat;
+        activeCmd = pathStr[0];
+        while (idx <= len) {
+            canRepeat = true;
+            switch (activeCmd) {
+                // moveto commands, become lineto's if repeated
+                case 'M':
+                    x = eatNum();
+                    y = eatNum();
+                    path.moveTo(x, y);
+                    activeCmd = 'L';
+                    firstX = x;
+                    firstY = y;
+                    break;
+                case 'm':
+                    x += eatNum();
+                    y += eatNum();
+                    path.moveTo(x, y);
+                    activeCmd = 'l';
+                    firstX = x;
+                    firstY = y;
+                    break;
+                case 'Z':
+                case 'z':
+                    canRepeat = false;
+                    if (x !== firstX || y !== firstY)
+                        path.lineTo(firstX, firstY);
+                    break;
+                // - lines!
+                case 'L':
+                case 'H':
+                case 'V':
+                    nx = (activeCmd === 'V') ? x : eatNum();
+                    ny = (activeCmd === 'H') ? y : eatNum();
+                    path.lineTo(nx, ny);
+                    x = nx;
+                    y = ny;
+                    break;
+                case 'l':
+                case 'h':
+                case 'v':
+                    nx = (activeCmd === 'v') ? x : (x + eatNum());
+                    ny = (activeCmd === 'h') ? y : (y + eatNum());
+                    path.lineTo(nx, ny);
+                    x = nx;
+                    y = ny;
+                    break;
+                // - cubic bezier
+                case 'C':
+                    x1 = eatNum(); y1 = eatNum();
+                case 'S':
+                    if (activeCmd === 'S') {
+                        x1 = 2 * x - x2; y1 = 2 * y - y2;
+                    }
+                    x2 = eatNum();
+                    y2 = eatNum();
+                    nx = eatNum();
+                    ny = eatNum();
+                    path.bezierCurveTo(x1, y1, x2, y2, nx, ny);
+                    x = nx; y = ny;
+                    break;
+                case 'c':
+                    x1 = x + eatNum();
+                    y1 = y + eatNum();
+                case 's':
+                    if (activeCmd === 's') {
+                        x1 = 2 * x - x2;
+                        y1 = 2 * y - y2;
+                    }
+                    x2 = x + eatNum();
+                    y2 = y + eatNum();
+                    nx = x + eatNum();
+                    ny = y + eatNum();
+                    path.bezierCurveTo(x1, y1, x2, y2, nx, ny);
+                    x = nx; y = ny;
+                    break;
+                // - quadratic bezier
+                case 'Q':
+                    x1 = eatNum(); y1 = eatNum();
+                case 'T':
+                    if (activeCmd === 'T') {
+                        x1 = 2 * x - x1;
+                        y1 = 2 * y - y1;
+                    }
+                    nx = eatNum();
+                    ny = eatNum();
+                    path.quadraticCurveTo(x1, y1, nx, ny);
+                    x = nx;
+                    y = ny;
+                    break;
+                case 'q':
+                    x1 = x + eatNum();
+                    y1 = y + eatNum();
+                case 't':
+                    if (activeCmd === 't') {
+                        x1 = 2 * x - x1;
+                        y1 = 2 * y - y1;
+                    }
+                    nx = x + eatNum();
+                    ny = y + eatNum();
+                    path.quadraticCurveTo(x1, y1, nx, ny);
+                    x = nx; y = ny;
+                    break;
+                // - elliptical arc
+                case 'A':
+                    rx = eatNum();
+                    ry = eatNum();
+                    xar = eatNum() * DEGS_TO_RADS;
+                    laf = eatNum();
+                    sf = eatNum();
+                    nx = eatNum();
+                    ny = eatNum();
+                    if (rx !== ry) {
+                        console.warn("Forcing elliptical arc to be a circular one :(",
+                            rx, ry);
+                    }
+                    // SVG implementation notes does all the math for us! woo!
+                    // http://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
+                    // step1, using x1 as x1'
+                    x1 = Math.cos(xar) * (x - nx) / 2 + Math.sin(xar) * (y - ny) / 2;
+                    y1 = -Math.sin(xar) * (x - nx) / 2 + Math.cos(xar) * (y - ny) / 2;
+                    // step 2, using x2 as cx'
+                    var norm = Math.sqrt(
+                         (rx*rx * ry*ry - rx*rx * y1*y1 - ry*ry * x1*x1) /
+                         (rx*rx * y1*y1 + ry*ry * x1*x1));
+                    if (laf === sf)
+                        norm = -norm;
+                    x2 = norm * rx * y1 / ry;
+                    y2 = norm * -ry * x1 / rx;
+                    // step 3
+                    cx = Math.cos(xar) * x2 - Math.sin(xar) * y2 + (x + nx) / 2;
+                    cy = Math.sin(xar) * x2 + Math.cos(xar) * y2 + (y + ny) / 2;
+                    var u = new THREE.Vector2(1, 0),
+                        v = new THREE.Vector2((x1 - x2) / rx,
+                                              (y1 - y2) / ry);
+                    var startAng = Math.acos(u.dot(v) / u.length() / v.length());
+                    if (u.x * v.y - u.y * v.x < 0)
+                        startAng = -startAng;
+                    // we can reuse 'v' from start angle as our 'u' for delta angle
+                    u.x = (-x1 - x2) / rx;
+                    u.y = (-y1 - y2) / ry;
+                    var deltaAng = Math.acos(v.dot(u) / v.length() / u.length());
+                    // This normalization ends up making our curves fail to triangulate...
+                    if (v.x * u.y - v.y * u.x < 0)
+                        deltaAng = -deltaAng;
+                    if (!sf && deltaAng > 0)
+                        deltaAng -= Math.PI * 2;
+                    if (sf && deltaAng < 0)
+                        deltaAng += Math.PI * 2;
+                    path.absarc(cx, cy, rx, startAng, startAng + deltaAng, sf);
+                    x = nx;
+                    y = ny;
+                    break;
+                default:
+                    throw new Error("weird path command: " + activeCmd);
+            }
+            // just reissue the command
+            if (canRepeat && nextIsNum())
+                continue;
+            activeCmd = pathStr[idx++];
+        }
+        return path;
+    }
+    }
+    var $d3g = {};
+    d3threeD($d3g);
+</script>
+
+
+
+<script>
+var controls;
+
+
+    function init3d(){
+        /// Global : renderer
+        renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setClearColor( 0xb0b0b0 );
+        renderer.setPixelRatio( window.devicePixelRatio );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        /// Global : scene
+        scene = new THREE.Scene();
+        /// Global : camera
+        camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 1000 );
+        camera.position.set( 0, -180, 60 );
+        //camera.position.set( 0, 0, 200 );
+        //console.log(camera.position);
+
+        /// Global : group
+        group = new THREE.Group();
+
+        extrudeGroup = new THREE.Group();
+
+        //var controls = new THREE.OrbitControls( camera, renderer.domElement );
+
+        controls = new THREE.OrbitControls(camera);
+        controls.rotateSpeed = 1.0;
+        controls.zoomSpeed = 1.2;
+        controls.panSpeed = 0.8;
+
+        /// backgroup grids
+        //var helper = new THREE.GridHelper( 160, 10 );
+        var helper = new THREE.GridHelper( 150, 40);
+        helper.rotation.x = Math.PI / 2;
+        group.add( helper );
+
+        var tlocrt = drawShape(0);
+        //console.log('prvi scene shape ' + group.children.length);
+        //console.log(drawShape());
+        console.log('main scene children length = ' + group.children.length);
+
+
+
+
+
+
+        scene.add( group );
+        
+        //scene.rotation.set(90, 0, 0);
+        var deg180 = 180*(Math.PI / 2);
+        scene.rotation.set(2*(Math.PI) / 2, 0, 0);
+
+
+        console.log('on start extrudeGroup '+ extrudeGroup.children.length);
+
+
+        $('#perspectiveView').click(function(){
+            
+            if(extrudeGroup.children.length === 0) {
+                console.log('extrudeGroup exist');
+                scene.add( extrudeGroup );
+                extrudeShape();
+                console.log(extrudeGroup.children.length);
+            }
+        });
+
+        $('#topView').click(function(){  
+            flatView();
+        });
+
+    }
+
+    function flatView() {
+        
+        for (var i = 0; i <= extrudeGroup.children.length; i++) {
+            var exBox = extrudeGroup.children[i];
+            exBox.tween = new TWEEN.Tween( exBox.material ).to( { opacity: 0 }, 1000 ).start();
+            setTimeout(function(){ 
+                for (var j = extrudeGroup.children.length - 1; j >= 0; j--) {
+                    extrudeGroup.remove(extrudeGroup.children[j]);
+                }
+            }, 1100);
+        }
+    }
+
+
+    function drawShape(arg) {
+
+
+        var obj = {};
+
+        obj.paths = [
+            /// 1
+            "M72.095,67.929h15.099v36.367H72.095V67.929z",
+            /// 2
+            "M55.839,67.929H71.74v9.234H55.839V67.929z",
+            /// 3
+            "M55.839,77.6H71.74v9.008H55.839V77.6z",
+            /// 4
+            "M55.484,67.929H32.667l0.202,18.679h22.615V67.929z"
+            ];
+
+        obj.colors =  [ 0xB5DDBD, 0xD7C5BC, 0xC4DDBC, 0xD6DBBB ];
+
+        var i,j, len, len1;
+        var path, mesh, color, material, amount, simpleShapes, simpleShape, x;
+        var thePaths = obj.paths;
+        var theAmounts = obj.amounts;
+        var theColors = obj.colors;
+        len = thePaths.length;
+
+        var extrudeSettings = { amount: arg, bevelEnabled: false, material: theColors, extrudeMaterial: 5 };
+
+
+
+        for (i = 0; i < len; ++i) {
+            path = $d3g.transformSVGPath( thePaths[i] );
+            color = new THREE.Color( theColors[i] );
+            material = new THREE.MeshLambertMaterial({
+                emissive: color
+            });
+
+            simpleShapes = path.toShapes(true);
+            len1 = simpleShapes.length;
+            for (j = 0; j < len1; ++j) {
+                simpleShape = simpleShapes[j];
+
+                //return simpleShape;
+
+                this.geom = new THREE.ExtrudeGeometry( simpleShape, extrudeSettings );
+
+                var mat = new THREE.MeshBasicMaterial( { color: color,  transparent: true, opacity: 0.4 } );
+
+                var mesh1 = new THREE.Mesh( geom, mat ) ;
+                mesh1.position.set(-60,-75, 0);
+                mesh1.name = 'mesh1';
+                var onScene = scene.getObjectByName('mesh1');
+                onSceneObj = scene.children.length;
+                group.add(mesh1);
+
+
+            }
+        }
+
+
+
+        // return the shape
+        //return shape;
+    }
+
+    function extrudeShape() {
+
+
+        var obj = {};
+
+        obj.paths = [
+            /// 1
+            "M72.095,67.929h15.099v36.367H72.095V67.929z",
+            /// 2
+            "M55.839,67.929H71.74v9.234H55.839V67.929z",
+            /// 3
+            "M55.839,77.6H71.74v9.008H55.839V77.6z",
+            /// 4
+            "M55.484,67.929H32.667l0.202,18.679h22.615V67.929z"
+            ];
+
+        obj.colors =  [ 0xB5DDBD, 0xD7C5BC, 0xC4DDBC, 0xD6DBBB ];
+
+        var i,j, len, len1;
+        var path, mesh, color, material, amount, simpleShapes, simpleShape, x;
+        var thePaths = obj.paths;
+        var theAmounts = obj.amounts;
+        var theColors = obj.colors;
+        len = thePaths.length;
+
+        var extrudeSettings = { amount: -20, bevelEnabled: false, material: theColors, extrudeMaterial: 5 };
+
+
+
+        for (i = 0; i < len; ++i) {
+            path = $d3g.transformSVGPath( thePaths[i] );
+            color = new THREE.Color( theColors[i] );
+            material = new THREE.MeshLambertMaterial({
+                emissive: color
+            });
+
+            simpleShapes = path.toShapes(true);
+            len1 = simpleShapes.length;
+            for (j = 0; j < len1; ++j) {
+                simpleShape = simpleShapes[j];
+
+                var geom = new THREE.ExtrudeGeometry( simpleShape, extrudeSettings );
+
+                var mat = new THREE.MeshBasicMaterial( { color: color,  transparent: true, opacity: 0 } );
+
+                mat.tween = new TWEEN.Tween( mat ).to( { opacity: 0.4 }, 1000 ).start();
+
+                var mesh1 = new THREE.Mesh( geom, mat ) ;
+                mesh1.position.set(-60,-75, 0);
+                mesh1.name = 'meshBox';
+                extrudeGroup.add(mesh1);
+
+            }
+        }
+
+    }
+
+    function onWindowResize() {
+        windowHalfX = window.innerWidth / 2;
+        windowHalfY = window.innerHeight / 2;
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        console.log(camera.position);
+    }
+
+
+    function animate() {
+        requestAnimationFrame( animate );
+        render();
+    }
+    function render() {
+        renderer.render( scene, camera );
+        TWEEN.update();
+        controls.update();
+    }
+
+    var renderer, stats;
+    var scene, camera, group;
+    var container = document.createElement( 'div' );
+    document.body.appendChild( container );
+    init3d();
+    container.appendChild( renderer.domElement );
+    window.addEventListener( 'resize', onWindowResize, false );
+    animate();
+
+</script>
+
+
+
+</body>
+</html>
